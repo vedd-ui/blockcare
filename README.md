@@ -4,7 +4,7 @@ BlockCare is a health-record system where **the patient owns the data**. Files a
 
 This project is a working implementation of the system described in our published paper (see [Paper](#paper)).
 
-[(blockcare/Patient.png)]
+[[(blockcare/Patient.png)]](https://github.com/vedd-ui/blockcare/blob/main/Patient.png)
 
 ## Features
 
@@ -157,9 +157,11 @@ truffle test
 6. **Patient** refreshes the list and checks **Activity**.
 7. **Patient** removes the doctor's access, and the doctor is blocked again.
 
-| Admin | Doctor | Lab |
-|---|---|---|
-| ![Admin](blockcare/Admin.png) | ![Doctor](blockcare/Doctor.png) | ![Lab](blockcare/DiagnosticsLab.png) |
+Admin:[[(blockcare/Admin.png)]](https://github.com/vedd-ui/blockcare/blob/main/Admin.png)
+
+Doctor:[[(blockcare/Doctor.png)]](https://github.com/vedd-ui/blockcare/blob/main/Doctor.png)
+
+Diagnostics Lab:[[(blockcare/DiagnosticsLab.png)]](https://github.com/vedd-ui/blockcare/blob/main/DiagnosticsLab.png)
 
 ## Security notes and limitations
 
