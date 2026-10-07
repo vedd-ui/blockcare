@@ -163,6 +163,8 @@ Doctor:[[(blockcare/Doctor.png)]](https://github.com/vedd-ui/blockcare/blob/main
 
 Diagnostics Lab:[[(blockcare/DiagnosticsLab.png)]](https://github.com/vedd-ui/blockcare/blob/main/DiagnosticsLab.png)
 
+We measured the rebuilt BlockCare contract on a local single-node Ganache network, running each action 500 times in sequence from one client. Read operations (record retrieval, and a doctor reading a patient's record after consent) completed in a median of about 31 to 34 ms and cost no gas. State-changing operations were slower and cost gas: adding a record took a median of 227 ms and 125,776 gas, granting access took 414 ms and 52,887 gas, and revoking access took 91 ms and 26,266 gas. A lab uploading a result for a patient took 182 ms and 130,984 gas. At a reference gas price of 20 gwei these transactions cost between 0.0005 and 0.0026 ETH. Times are from a local test network and exclude IPFS transfer and file encryption, so they should not be compared directly with cloud or public-network figures.
+
 ## Security notes and limitations
 
 This is a research prototype, not a production health system.
