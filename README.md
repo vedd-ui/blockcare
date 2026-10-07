@@ -187,4 +187,4 @@ This is a research prototype, not a production health system.
 Subhash G. Rathod, Pradhyuman Omkar Patel, Vaibhav Suresh Bhirud, Ved Prasad Dodwadkar, Sanket Dhananjay Kokadwar
 Department of Computer Engineering, Marathwada Mitra Mandal's Institute of Technology, Pune, India
 
-[Add the link or DOI of the published paper here]
+[(https://blockchainhealthcaretoday.com/index.php/journal/article/view/381/1041)]
