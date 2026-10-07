@@ -9,7 +9,13 @@ contract BlockCare {
         string recordType;
         address uploadedBy;
         uint256 timestamp;
+        uint8 category;
     }
+
+    // Record categories (numbers stored on-chain):
+    // 0 History, 1 Lab result, 2 Imaging, 3 Prescription,
+    // 4 Vaccination, 5 Treatment plan, 6 Other
+    uint8 public constant MAX_CATEGORY = 6;
 
     address public admin;
     mapping(address => Role) public roles;
@@ -20,7 +26,7 @@ contract BlockCare {
     mapping(address => mapping(address => bool)) public requested;
 
     event RoleSet(address indexed user, Role role);
-    event RecordAdded(address indexed patient, address indexed by, string ipfsHash, string recordType, uint256 timestamp);
+    event RecordAdded(address indexed patient, address indexed by, string ipfsHash, string recordType, uint256 timestamp, uint8 category);
     event AccessRequested(address indexed patient, address indexed provider);
     event AccessGranted(address indexed patient, address indexed provider);
     event AccessRevoked(address indexed patient, address indexed provider);
@@ -55,18 +61,20 @@ contract BlockCare {
     }
 
     // ---------- records ----------
-    function addRecord(string memory _ipfsHash, string memory _recordType) public {
+    function addRecord(string memory _ipfsHash, string memory _recordType, uint8 _category) public {
         require(roles[msg.sender] == Role.Patient, "Not a patient");
-        records[msg.sender].push(Record(_ipfsHash, _recordType, msg.sender, block.timestamp));
-        emit RecordAdded(msg.sender, msg.sender, _ipfsHash, _recordType, block.timestamp);
+        require(_category <= MAX_CATEGORY, "Bad category");
+        records[msg.sender].push(Record(_ipfsHash, _recordType, msg.sender, block.timestamp, _category));
+        emit RecordAdded(msg.sender, msg.sender, _ipfsHash, _recordType, block.timestamp, _category);
     }
 
-    function addRecordFor(address _patient, string memory _ipfsHash, string memory _recordType) public {
+    function addRecordFor(address _patient, string memory _ipfsHash, string memory _recordType, uint8 _category) public {
         require(roles[msg.sender] == Role.Lab, "Not a lab");
         require(roles[_patient] == Role.Patient, "Not a patient");
         require(access[_patient][msg.sender], "Patient has not allowed this lab");
-        records[_patient].push(Record(_ipfsHash, _recordType, msg.sender, block.timestamp));
-        emit RecordAdded(_patient, msg.sender, _ipfsHash, _recordType, block.timestamp);
+        require(_category <= MAX_CATEGORY, "Bad category");
+        records[_patient].push(Record(_ipfsHash, _recordType, msg.sender, block.timestamp, _category));
+        emit RecordAdded(_patient, msg.sender, _ipfsHash, _recordType, block.timestamp, _category);
     }
 
     // ---------- access ----------
@@ -104,11 +112,11 @@ contract BlockCare {
 
     function getRecord(address _patient, uint256 _index)
         public view
-        returns (string memory, string memory, address, uint256)
+        returns (string memory, string memory, address, uint256, uint8)
     {
         require(canRead(_patient, msg.sender), "No access");
         require(_index < records[_patient].length, "Bad index");
         Record memory r = records[_patient][_index];
-        return (r.ipfsHash, r.recordType, r.uploadedBy, r.timestamp);
+        return (r.ipfsHash, r.recordType, r.uploadedBy, r.timestamp, r.category);
     }
 }

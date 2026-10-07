@@ -5,6 +5,8 @@ import artifact from "./BlockCare.json";
 const IPFS_API = "http://127.0.0.1:5001/api/v0";
 const IPFS_GATEWAY = "http://127.0.0.1:8080/ipfs";
 const ROLE_NAMES = ["No role yet", "Patient", "Doctor", "Diagnostic Lab"];
+// must match the numbers in the smart contract
+const CATEGORIES = ["History", "Lab result", "Imaging", "Prescription", "Vaccination", "Treatment plan", "Other"];
 
 // ---------- locking and unlocking files ----------
 async function getKey(password, salt) {
@@ -52,6 +54,8 @@ export default function App() {
   const [newRole, setNewRole] = useState("2");
   const [file, setFile] = useState(null);
   const [label, setLabel] = useState("");
+  const [category, setCategory] = useState("6");
+  const [filterCat, setFilterCat] = useState("all");
   const [password, setPassword] = useState("");
   const [records, setRecords] = useState([]);
   const [recordsOwner, setRecordsOwner] = useState("");
@@ -165,7 +169,7 @@ export default function App() {
     try {
       const Hash = await pushToIpfs();
       await act(
-        () => contract.addRecord(Hash, `${label || "record"}|${file.name}`),
+        () => contract.addRecord(Hash, `${label || "record"}|${file.name}`, Number(category)),
         "Saved! Your file is locked, stored on IPFS, and logged on the blockchain.",
         async () => {
           await loadRecords(account);
@@ -182,7 +186,7 @@ export default function App() {
     try {
       const Hash = await pushToIpfs();
       await act(
-        () => contract.addRecordFor(target, Hash, `${label || "lab result"}|${file.name}`),
+        () => contract.addRecordFor(target, Hash, `${label || "lab result"}|${file.name}`, Number(category)),
         "Lab result added to the patient's record."
       );
     } catch (e) {
@@ -197,7 +201,7 @@ export default function App() {
       const list = [];
       for (let i = 0; i < n; i++) {
         const r = await contract.getRecord(owner, i);
-        list.push({ cid: r[0], type: r[1], by: r[2], time: Number(r[3]) });
+        list.push({ cid: r[0], type: r[1], by: r[2], time: Number(r[3]), category: Number(r[4]) });
       }
       setRecords(list);
       setRecordsOwner(owner);
@@ -256,7 +260,7 @@ export default function App() {
         ["AccessRequested", (a) => `${short(a[1])} asked for access`],
         ["AccessGranted", (a) => `You allowed ${short(a[1])}`],
         ["AccessRevoked", (a) => `You removed access for ${short(a[1])}`],
-        ["RecordAdded", (a) => `Record "${a[3].split("|")[0]}" added by ${same(a[1], account) ? "you" : short(a[1])}`],
+        ["RecordAdded", (a) => `Record "${a[3].split("|")[0]}" (${CATEGORIES[Number(a[5])]}) added by ${same(a[1], account) ? "you" : short(a[1])}`],
       ];
       const times = {};
       const entries = [];
@@ -287,6 +291,12 @@ export default function App() {
     <>
       <label>File</label>
       <input type="file" onChange={(e) => setFile(e.target.files[0])} />
+      <label>Category</label>
+      <select value={category} onChange={(e) => setCategory(e.target.value)}>
+        {CATEGORIES.map((c, i) => (
+          <option key={i} value={String(i)}>{c}</option>
+        ))}
+      </select>
       <label>Label (for example: blood test)</label>
       <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} />
       <label>Secret password for this file</label>
@@ -301,26 +311,46 @@ export default function App() {
     </>
   );
 
-  const recordsList = () => (
-    <>
-      {records.length === 0 && <p className="empty">No records to show yet.</p>}
-      {records.map((r, i) => {
-        const [name, fname] = r.type.split("|");
-        return (
-          <div className="record" key={i}>
-            <div>
-              <div className="record-title">{name}</div>
-              <div className="muted">{fname} · {new Date(r.time * 1000).toLocaleString()}</div>
-              <div className="muted">
-                Added by {same(r.by, recordsOwner) ? "the patient" : short(r.by) + " (lab)"}
+  const recordsList = () => {
+    const shown = records.filter((r) => filterCat === "all" || r.category === Number(filterCat));
+    return (
+      <>
+        {records.length > 0 && (
+          <>
+            <label>Show category</label>
+            <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
+              <option value="all">All categories</option>
+              {CATEGORIES.map((c, i) => (
+                <option key={i} value={String(i)}>{c}</option>
+              ))}
+            </select>
+          </>
+        )}
+        {records.length === 0 && <p className="empty">No records to show yet.</p>}
+        {records.length > 0 && shown.length === 0 && <p className="empty">No records in this category.</p>}
+        {shown.map((r, i) => {
+          const [name, fname] = r.type.split("|");
+          return (
+            <div className="record" key={i}>
+              <div>
+                <div className="record-title">
+                  {name}{" "}
+                  <span style={{ fontSize: "0.75em", padding: "2px 8px", borderRadius: "10px", background: "#e0f2f1", color: "#00695c" }}>
+                    {CATEGORIES[r.category]}
+                  </span>
+                </div>
+                <div className="muted">{fname} · {new Date(r.time * 1000).toLocaleString()}</div>
+                <div className="muted">
+                  Added by {same(r.by, recordsOwner) ? "the patient" : short(r.by) + " (lab)"}
+                </div>
               </div>
+              <button className="btn-blue btn-small" onClick={() => download(r)}>Unlock and download</button>
             </div>
-            <button className="btn-blue btn-small" onClick={() => download(r)}>Unlock and download</button>
-          </div>
-        );
-      })}
-    </>
-  );
+          );
+        })}
+      </>
+    );
+  };
 
   return (
     <>
