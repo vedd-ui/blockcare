@@ -4,6 +4,8 @@ BlockCare is a health-record system where **the patient owns the data**. Files a
 
 This project is a working implementation of the system described in our published paper (see [Paper](#paper)).
 
+[(blockcare/Patient.png)]
+
 ## Features
 
 - **Role-based access** for four kinds of users: Admin, Patient, Doctor, and Diagnostic Lab
@@ -157,7 +159,7 @@ truffle test
 
 | Admin | Doctor | Lab |
 |---|---|---|
-| ![Admin](docs/screenshots/admin.png) | ![Doctor](docs/screenshots/doctor.png) | ![Lab](docs/screenshots/lab.png) |
+| ![Admin](blockcare/Admin.png) | ![Doctor](blockcare/Doctor.png) | ![Lab](blockcare/DiagnosticsLab.png) |
 
 ## Security notes and limitations
 
