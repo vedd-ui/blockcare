@@ -1,46 +1,64 @@
 const BlockCare = artifacts.require("BlockCare");
 const assert = require("assert");
 
+async function shouldFail(promise, text) {
+  try {
+    await promise;
+  } catch (e) {
+    assert(e.message.includes(text), "Wrong error: " + e.message);
+    return;
+  }
+  assert.fail("Expected a failure containing: " + text);
+}
+
 contract("BlockCare", (accounts) => {
-  const patient = accounts[1];
-  const doctor = accounts[2];
-  let instance;
+  const [admin, patient, doctor, lab, stranger] = accounts;
+  const DOCTOR = 2, LAB = 3;
+  let c;
 
   before(async () => {
-    instance = await BlockCare.new();
+    c = await BlockCare.new({ from: admin });
+    await c.registerAsPatient({ from: patient });
+    await c.approveProvider(doctor, DOCTOR, { from: admin });
+    await c.approveProvider(lab, LAB, { from: admin });
+  });
+
+  it("only admin can approve providers", async () => {
+    await shouldFail(c.approveProvider(stranger, DOCTOR, { from: stranger }), "Only admin");
+  });
+
+  it("stranger cannot add a record", async () => {
+    await shouldFail(c.addRecord("QmX", "x", { from: stranger }), "Not a patient");
   });
 
   it("patient can add and read own record", async () => {
-    await instance.addRecord("QmFakeHash123", "lab report", { from: patient });
-    const count = await instance.getRecordCount(patient, { from: patient });
-    assert.equal(count.toString(), "1");
-    const rec = await instance.getRecord(patient, 0, { from: patient });
-    assert.equal(rec[0], "QmFakeHash123");
+    await c.addRecord("QmPatientFile", "lab report|a.txt", { from: patient });
+    const n = await c.getRecordCount(patient, { from: patient });
+    assert.equal(n.toString(), "1");
   });
 
   it("doctor cannot read before permission", async () => {
-    try {
-      await instance.getRecordCount(patient, { from: doctor });
-      assert.fail("Doctor should not have access");
-    } catch (e) {
-      assert(e.message.includes("No access"));
-    }
+    await shouldFail(c.getRecordCount(patient, { from: doctor }), "No access");
   });
 
-  it("doctor can read after patient grants access", async () => {
-    await instance.requestAccess(patient, { from: doctor });
-    await instance.grantAccess(doctor, { from: patient });
-    const count = await instance.getRecordCount(patient, { from: doctor });
-    assert.equal(count.toString(), "1");
+  it("doctor can read after grant, not after revoke", async () => {
+    await c.requestAccess(patient, { from: doctor });
+    await c.grantAccess(doctor, { from: patient });
+    const n = await c.getRecordCount(patient, { from: doctor });
+    assert.equal(n.toString(), "1");
+    await c.revokeAccess(doctor, { from: patient });
+    await shouldFail(c.getRecordCount(patient, { from: doctor }), "No access");
   });
 
-  it("doctor loses access after revoke", async () => {
-    await instance.revokeAccess(doctor, { from: patient });
-    try {
-      await instance.getRecordCount(patient, { from: doctor });
-      assert.fail("Doctor should not have access");
-    } catch (e) {
-      assert(e.message.includes("No access"));
-    }
+  it("lab cannot upload before permission", async () => {
+    await shouldFail(c.addRecordFor(patient, "QmLab", "blood test|b.txt", { from: lab }), "not allowed");
+  });
+
+  it("lab can upload after grant, but cannot read records", async () => {
+    await c.grantAccess(lab, { from: patient });
+    await c.addRecordFor(patient, "QmLab", "blood test|b.txt", { from: lab });
+    const n = await c.getRecordCount(patient, { from: patient });
+    assert.equal(n.toString(), "2");
+    await shouldFail(c.getRecordCount(patient, { from: lab }), "No access");
   });
 });
