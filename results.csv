@@ -1,0 +1,8 @@
+action,type,samples,mean_ms,median_ms,p95_ms,min_ms,max_ms,mean_gas,mean_cost_eth
+"Patient adds record (addRecord)",tx,500,251.76,226.65,434.56,102.55,878.58,125776,0.002516
+"Patient grants access (grantAccess)",tx,500,439.72,414.43,694.76,216.43,1437.77,52887,0.001058
+"Patient revokes access (revokeAccess)",tx,500,95.43,90.60,158.70,41.98,280.81,26266,0.000525
+"Lab uploads result for patient (addRecordFor)",tx,500,206.16,181.88,339.15,100.94,649.63,130984,0.002620
+"Doctor reads patient record (getRecord)",call,500,35.30,33.72,50.06,21.90,103.47,0,0
+"Patient reads own record (getRecord)",call,500,31.93,30.78,43.07,21.79,83.60,0,0
+"Patient reads record count (getRecordCount)",call,500,13.57,13.21,17.98,8.66,33.37,0,0
