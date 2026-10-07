@@ -1,6 +1,6 @@
 # BlockCare: A Blockchain-Enabled Secured EHR System
 
-BlockCare is a health-record system where **the patient owns the data**. Files are encrypted in the browser, stored on **IPFS**, and tracked on **Ethereum** by a smart contract that decides who can see what. Doctors and labs get in only when the patient says yes, and every step is written to the blockchain.
+BlockCare is a prototype health-record system. Patients upload encrypted files to IPFS and decide which doctors and labs can access them, with access rules and an audit trail kept on an Ethereum smart contract. It runs on a local test network and is a research rebuild, not a production medical system.
 
 This project is a working implementation of the system described in our published paper (see [Paper](#paper)).
 
