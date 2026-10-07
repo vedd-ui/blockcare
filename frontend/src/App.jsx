@@ -21,13 +21,61 @@ async function getKey(password, salt) {
   );
 }
 
-async function encryptFile(file, password) {
+async function encryptBytes(bytes, password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await getKey(password, salt);
-  const data = await file.arrayBuffer();
-  const locked = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+  const locked = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, bytes);
   return new Blob([salt, iv, locked]);
+}
+
+// ---------- FHIR-inspired record (NOT validated FHIR) ----------
+function bytesToBase64(bytes) {
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+
+function base64ToBytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// Wraps the file in a JSON record that uses FHIR "DocumentReference" field names
+async function buildRecord(file, meta) {
+  const data = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+  return {
+    resourceType: "DocumentReference",
+    status: "current",
+    docStatus: "final",
+    type: { text: meta.label },
+    category: [
+      { coding: [{ system: "urn:blockcare:categories", code: String(meta.category), display: CATEGORIES[meta.category] }] },
+    ],
+    subject: { reference: "Patient/" + meta.subject },
+    author: [{ reference: meta.authorType + "/" + meta.author }],
+    date: new Date().toISOString(),
+    description: meta.label,
+    content: [
+      {
+        attachment: {
+          contentType: file.type || "application/octet-stream",
+          title: file.name,
+          size: file.size,
+          data,
+        },
+      },
+    ],
+  };
+}
+
+async function encryptRecord(record, password) {
+  return encryptBytes(new TextEncoder().encode(JSON.stringify(record)), password);
 }
 
 async function decryptBytes(buffer, password) {
@@ -37,6 +85,18 @@ async function decryptBytes(buffer, password) {
   const data = bytes.slice(28);
   const key = await getKey(password, salt);
   return crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
+}
+
+// Opens a stored file. New records are JSON records; older ones are plain files.
+async function unlockRecord(buffer, password) {
+  const plain = await decryptBytes(buffer, password);
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(plain));
+    if (parsed && parsed.resourceType === "DocumentReference") return { kind: "record", record: parsed };
+  } catch (e) {
+    // not JSON, so it is an older plain file
+  }
+  return { kind: "raw", plain };
 }
 
 const short = (a) => (a ? a.slice(0, 6) + "..." + a.slice(-4) : "");
@@ -56,6 +116,7 @@ export default function App() {
   const [label, setLabel] = useState("");
   const [category, setCategory] = useState("6");
   const [filterCat, setFilterCat] = useState("all");
+  const [detail, setDetail] = useState("");
   const [password, setPassword] = useState("");
   const [records, setRecords] = useState([]);
   const [recordsOwner, setRecordsOwner] = useState("");
@@ -152,10 +213,17 @@ export default function App() {
   }
 
   // ---------- files ----------
-  async function pushToIpfs() {
+  async function pushToIpfs(subject, authorType) {
     if (!file || !password) throw new Error("Choose a file and type a password first");
-    say("Locking the file...");
-    const blob = await encryptFile(file, password);
+    say("Building the record and locking it...");
+    const record = await buildRecord(file, {
+      label: label || "record",
+      category: Number(category),
+      subject,
+      author: account,
+      authorType,
+    });
+    const blob = await encryptRecord(record, password);
     const form = new FormData();
     form.append("file", blob);
     say("Sending to IPFS...");
@@ -167,7 +235,7 @@ export default function App() {
 
   async function patientUpload() {
     try {
-      const Hash = await pushToIpfs();
+      const Hash = await pushToIpfs(account, "Patient");
       await act(
         () => contract.addRecord(Hash, `${label || "record"}|${file.name}`, Number(category)),
         "Saved! Your file is locked, stored on IPFS, and logged on the blockchain.",
@@ -184,7 +252,7 @@ export default function App() {
   async function labUpload() {
     if (!needAddress()) return;
     try {
-      const Hash = await pushToIpfs();
+      const Hash = await pushToIpfs(target, "Organization");
       await act(
         () => contract.addRecordFor(target, Hash, `${label || "lab result"}|${file.name}`, Number(category)),
         "Lab result added to the patient's record."
@@ -221,14 +289,43 @@ export default function App() {
     try {
       if (!password) return say("Type the file password first", "error");
       const res = await fetch(`${IPFS_GATEWAY}/${rec.cid}`);
-      const plain = await decryptBytes(await res.arrayBuffer(), password);
+      const u = await unlockRecord(await res.arrayBuffer(), password);
+      let bytes, name;
+      if (u.kind === "record") {
+        const att = u.record.content[0].attachment;
+        bytes = base64ToBytes(att.data);
+        name = att.title;
+      } else {
+        bytes = u.plain;
+        name = rec.type.split("|")[1];
+      }
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([plain]));
-      a.download = rec.type.split("|")[1] || "record";
+      a.href = URL.createObjectURL(new Blob([bytes]));
+      a.download = name || "record";
       a.click();
       say("Downloaded", "success");
     } catch (e) {
       say("Could not open the file. Is the password right?", "error");
+    }
+  }
+
+  async function viewDetails(rec) {
+    try {
+      if (!password) return say("Type the file password first", "error");
+      const res = await fetch(`${IPFS_GATEWAY}/${rec.cid}`);
+      const u = await unlockRecord(await res.arrayBuffer(), password);
+      if (u.kind !== "record") {
+        setDetail("");
+        return say("This is an older record with no details stored inside it.", "info");
+      }
+      // hide the long file data so the details are easy to read
+      const copy = JSON.parse(JSON.stringify(u.record));
+      const att = copy.content[0].attachment;
+      att.data = "(" + att.size + " bytes of file data, hidden here)";
+      setDetail(JSON.stringify(copy, null, 2));
+      say("Details unlocked", "success");
+    } catch (e) {
+      say("Could not open the record. Is the password right?", "error");
     }
   }
 
@@ -344,10 +441,22 @@ export default function App() {
                   Added by {same(r.by, recordsOwner) ? "the patient" : short(r.by) + " (lab)"}
                 </div>
               </div>
-              <button className="btn-blue btn-small" onClick={() => download(r)}>Unlock and download</button>
+              <div className="row">
+                <button className="btn-outline btn-small" onClick={() => viewDetails(r)}>View details</button>
+                <button className="btn-blue btn-small" onClick={() => download(r)}>Unlock and download</button>
+              </div>
             </div>
           );
         })}
+        {detail && (
+          <>
+            <label>Record details (FHIR-style JSON)</label>
+            <pre style={{ background: "#f4f7f8", padding: "12px", borderRadius: "8px", overflowX: "auto", fontSize: "0.8em" }}>{detail}</pre>
+            <div className="row">
+              <button className="btn-outline btn-small" onClick={() => setDetail("")}>Close details</button>
+            </div>
+          </>
+        )}
       </>
     );
   };

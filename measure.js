@@ -82,7 +82,7 @@ module.exports = async function (callback) {
 
     // 1) Smart contract execution (transactions that cost gas)
     await runTx("Patient adds record (addRecord)", "tx", N, (i) =>
-      c.addRecord("QmFakeHash" + i, "lab report|file" + i + ".txt", { from: patient })
+      c.addRecord("QmFakeHash" + i, "lab report|file" + i + ".txt", 1, { from: patient })
     );
 
     // grant / revoke a doctor, N times each (alternating)
@@ -103,7 +103,7 @@ module.exports = async function (callback) {
     //    (a) lab uploads a result into the patient's record
     await c.grantAccess(lab, { from: patient });
     await runTx("Lab uploads result for patient (addRecordFor)", "tx", N, (i) =>
-      c.addRecordFor(patient, "QmLabHash" + i, "blood test|lab" + i + ".txt", { from: lab })
+      c.addRecordFor(patient, "QmLabHash" + i, "blood test|lab" + i + ".txt", 1, { from: lab })
     );
 
     //    (b) doctor reads the patient's records (access is checked on-chain)
